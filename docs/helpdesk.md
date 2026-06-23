@@ -36,22 +36,32 @@ WHERE ServiceName = 'SmsGatewayMM'
 
 Expected rows (one per subsystem):
 
-| ServiceName | SubsystemName | LogLevel | LogEnabled |
-|---|---|---|---|
-| SmsGatewayMM | SMSGMM_NewMember | 0 | 1 |
-| SmsGatewayMM | SMSGMM_TierUpgrade | 0 | 1 |
-| SmsGatewayMM | SMSGMM_BonusAward | 0 | 1 |
+| ServiceID | ServiceName | SubsystemID | SubsystemName | LogLevel | LogEnabled |
+|---|---|---|---|---|---|
+| 1 | SmsGatewayMM | 1 | SMSGMM_NewMember | 0 | 1 |
+| 1 | SmsGatewayMM | 2 | SMSGMM_TierUpgrade | 0 | 1 |
+| 1 | SmsGatewayMM | 3 | SMSGMM_BonusAward | 0 | 1 |
 
 **If any row is missing the subsystem silently defaults to Normal (0). Verify all three rows exist before handing over to help desk.**
 
 Insert rows on first deployment (run once per barrel DB):
 
 ```sql
-INSERT INTO Configuration.Services_Logging (ServiceName, SubsystemName, LogLevel, LogEnabled)
+USE [PE_Barrel_Cloud_Master]
+GO
+
+INSERT INTO [Configuration].[Services_Logging]
+           ([ServiceID]
+           ,[ServiceName]
+           ,[SubsystemID]
+           ,[SubsystemName]
+           ,[LogLevel]
+           ,[LogEnabled]
+           ,[ModifiedDate])
 VALUES
-    ('SmsGatewayMM', 'SMSGMM_NewMember',   0, 1),
-    ('SmsGatewayMM', 'SMSGMM_TierUpgrade', 0, 1),
-    ('SmsGatewayMM', 'SMSGMM_BonusAward',  0, 1)
+    (1, 'SmsGatewayMM', 1, 'SMSGMM_NewMember',   0, 1, GETDATE()),
+    (1, 'SmsGatewayMM', 2, 'SMSGMM_TierUpgrade', 0, 1, GETDATE()),
+    (1, 'SmsGatewayMM', 3, 'SMSGMM_BonusAward',  0, 1, GETDATE())
 ```
 
 Log levels: `0 = Normal`, `1 = Debug`, `2 = Verbose`
@@ -60,7 +70,7 @@ Change log level for a subsystem (no restart needed):
 
 ```sql
 UPDATE Configuration.Services_Logging
-SET LogLevel = 1  -- 1=Debug, 2=Verbose
+SET LogLevel = 1, ModifiedDate = GETDATE()  -- 1=Debug, 2=Verbose
 WHERE ServiceName = 'SmsGatewayMM' AND SubsystemName = 'SMSGMM_BonusAward'
 ```
 
