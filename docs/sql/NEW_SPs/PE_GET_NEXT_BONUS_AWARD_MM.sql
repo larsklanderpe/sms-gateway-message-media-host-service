@@ -3,7 +3,7 @@
 -- Created: 2026-06-22
 -- ============================================================
 -- History:
---   2026-06-22 | Written for sms-gateway-message-media-host-service build 1.0.x.x
+--   2026-06-22 | Written for sms-gateway-message-media-host-service build 6.6.x.x
 -- ============================================================
 -- PURPOSE:
 --   Gets the next pending BonusAward (PlayerOffers) record, marks it
@@ -26,6 +26,17 @@
 --   - Orphaned record suppression (host or promo ref missing)
 --   - PE Host Guard: suppress if this PE host already transmitted today
 -- ============================================================
+
+-- ============================================================
+-- RENAME GATE
+-- ============================================================
+IF OBJECT_ID('[SMSGateway].[PE_GET_NEXT_BONUS_AWARD_MM]') IS NOT NULL
+BEGIN
+    IF OBJECT_ID('[SMSGateway].[PE_GET_NEXT_BONUS_AWARD_MM_BAK]') IS NOT NULL
+        DROP PROCEDURE [SMSGateway].[PE_GET_NEXT_BONUS_AWARD_MM_BAK]
+    EXEC sp_rename '[SMSGateway].[PE_GET_NEXT_BONUS_AWARD_MM]', 'PE_GET_NEXT_BONUS_AWARD_MM_BAK', 'OBJECT'
+END
+GO
 
 CREATE OR ALTER PROCEDURE [SMSGateway].[PE_GET_NEXT_BONUS_AWARD_MM]
 WITH RECOMPILE

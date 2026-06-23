@@ -3,7 +3,7 @@
 -- Created: 2026-06-22
 -- ============================================================
 -- History:
---   2026-06-22 | Written for sms-gateway-message-media-host-service build 1.0.x.x
+--   2026-06-22 | Written for sms-gateway-message-media-host-service build 6.6.x.x
 -- ============================================================
 -- PURPOSE:
 --   Gets the next pending TierUpgrade record, marks it InTransmission, writes
@@ -32,6 +32,17 @@
 --     old sub-SP).
 --   - @venueid as INT to match the original SP; @userID concat uses CAST.
 -- ============================================================
+
+-- ============================================================
+-- RENAME GATE
+-- ============================================================
+IF OBJECT_ID('[SMSGateway].[PE_GET_NEXT_TIER_UPGRADE_MM]') IS NOT NULL
+BEGIN
+    IF OBJECT_ID('[SMSGateway].[PE_GET_NEXT_TIER_UPGRADE_MM_BAK]') IS NOT NULL
+        DROP PROCEDURE [SMSGateway].[PE_GET_NEXT_TIER_UPGRADE_MM_BAK]
+    EXEC sp_rename '[SMSGateway].[PE_GET_NEXT_TIER_UPGRADE_MM]', 'PE_GET_NEXT_TIER_UPGRADE_MM_BAK', 'OBJECT'
+END
+GO
 
 CREATE OR ALTER PROCEDURE [SMSGateway].[PE_GET_NEXT_TIER_UPGRADE_MM]
 WITH RECOMPILE

@@ -4,8 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <WindowsService>true</WindowsService>
-    <AutoBuildMajor>1</AutoBuildMajor>
-    <AutoBuildMinor>0</AutoBuildMinor>
+    <AutoBuildMajor>6</AutoBuildMajor>
+    <AutoBuildMinor>6</AutoBuildMinor>
     <ProjectStartDate>2026-06-22</ProjectStartDate>
   </PropertyGroup>
   <Import Project="AutoBuildNumber.targets" />
