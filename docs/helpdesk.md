@@ -44,6 +44,16 @@ Expected rows (one per subsystem):
 
 **If any row is missing the subsystem silently defaults to Normal (0). Verify all three rows exist before handing over to help desk.**
 
+Insert rows on first deployment (run once per barrel DB):
+
+```sql
+INSERT INTO Configuration.Services_Logging (ServiceName, SubsystemName, LogLevel, LogEnabled)
+VALUES
+    ('SmsGatewayMM', 'SMSGMM_NewMember',   0, 1),
+    ('SmsGatewayMM', 'SMSGMM_TierUpgrade', 0, 1),
+    ('SmsGatewayMM', 'SMSGMM_BonusAward',  0, 1)
+```
+
 Log levels: `0 = Normal`, `1 = Debug`, `2 = Verbose`
 
 Change log level for a subsystem (no restart needed):
