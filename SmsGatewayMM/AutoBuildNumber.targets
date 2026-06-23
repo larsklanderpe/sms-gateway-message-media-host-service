@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AutoBuildNumber.targets
+  =======================
+  Drop this file into any project directory (alongside the .csproj).
+  Then add the following line to your .csproj inside <Project>:
+
+      <Import Project="AutoBuildNumber.targets" />
+
+  On every build, the Build number (3rd segment) is auto-incremented
+  and written back to a BuildNumber.txt file in the same directory.
+
+  The resulting AssemblyVersion / AssemblyFileVersion will be:
+      <Major>.<Minor>.<Build>.<Revision>
+
+  Major and Minor come from VersionPrefix in your .csproj (or defaults below).
+  Build is the auto-incrementing counter stored in BuildNumber.txt.
+  Revision is 0 (or override as needed).
+
+  For .NET Framework projects using AssemblyInfo.cs, see the commented
+  section at the bottom of this file.
+
+  GITIGNORE NOTE:
+  Add this line to your .gitignore to keep the counter out of source control
+  (each dev/build agent maintains its own counter):
+      BuildNumber.txt
+  OR commit BuildNumber.txt if you want a shared, repo-level build counter.
+-->
+<Project>
+
+  <!-- ── Configuration ─────────────────────────────────────────────────── -->
+  <PropertyGroup>
+    <!-- Override these in your .csproj <PropertyGroup> if needed -->
+    <AutoBuildMajor Condition="'$(AutoBuildMajor)' == ''">1</AutoBuildMajor>
+    <AutoBuildMinor Condition="'$(AutoBuildMinor)' == ''">0</AutoBuildMinor>
+    <BuildNumberFile Condition="'$(BuildNumberFile)' == ''">$(MSBuildProjectDirectory)\BuildNumber.txt</BuildNumberFile>
+  </PropertyGroup>
+
+  <!-- ── Read current build number ─────────────────────────────────────── -->
+  <Target Name="ReadBuildNumber" BeforeTargets="BeforeBuild">
+
+    <!-- Create the file with 0 if it doesn't exist yet -->
+    <WriteLinesToFile
+      File="$(BuildNumberFile)"
+      Lines="0"
+      Condition="!Exists('$(BuildNumberFile)')" />
+
+    <!-- Read the current value -->
+    <ReadLinesFromFile File="$(BuildNumberFile)">
+      <Output TaskParameter="Lines" PropertyName="CurrentBuildNumber" />
+    </ReadLinesFromFile>
+
+    <!-- Increment it -->
+    <PropertyGroup>
+      <NextBuildNumber>$([MSBuild]::Add($(CurrentBuildNumber), 1))</NextBuildNumber>
+    </PropertyGroup>
+
+    <!-- Write the incremented value back -->
+    <WriteLinesToFile
+      File="$(BuildNumberFile)"
+      Lines="$(NextBuildNumber)"
+      Overwrite="true" />
+
+    <!-- Compose the full version string -->
+    <PropertyGroup>
+      <AutoVersion>$(AutoBuildMajor).$(AutoBuildMinor).$(NextBuildNumber).0</AutoVersion>
+    </PropertyGroup>
+
+    <Message Text="##[section] Build number: $(AutoVersion)" Importance="High" />
+  </Target>
+
+  <!-- ── Apply version to SDK-style projects (.NET Core / .NET 5+) ─────── -->
+  <Target Name="ApplyBuildNumber"
+          AfterTargets="ReadBuildNumber"
+          BeforeTargets="GenerateAssemblyInfo;CoreCompile">
+    <PropertyGroup>
+      <AssemblyVersion>$(AutoVersion)</AssemblyVersion>
+      <FileVersion>$(AutoVersion)</FileVersion>
+    </PropertyGroup>
+  </Target>
+
+</Project>
