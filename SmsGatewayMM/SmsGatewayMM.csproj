@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <WindowsService>true</WindowsService>
+    <AutoBuildMajor>6</AutoBuildMajor>
+    <AutoBuildMinor>6</AutoBuildMinor>
+    <ProjectStartDate>2026-06-22</ProjectStartDate>
+  </PropertyGroup>
+  <Import Project="AutoBuildNumber.targets" />
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.*" />
+    <PackageReference Include="Dapper" Version="2.*" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" />
+  </ItemGroup>
+</Project>
