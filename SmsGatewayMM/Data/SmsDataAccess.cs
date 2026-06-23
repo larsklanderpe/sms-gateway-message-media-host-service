@@ -40,4 +40,31 @@ class SmsDataAccess
             Content: (string)row.content
         );
     }
+
+    public void ConfirmSent(ISmsWorkerStrategy strategy, int id, int venueId)
+    {
+        using var conn = new SqlConnection(_connectionString);
+        conn.Execute(
+            strategy.ConfirmProcedure,
+            new { id, venue_id = venueId },
+            commandType: CommandType.StoredProcedure);
+    }
+
+    public void ResetFailed(ISmsWorkerStrategy strategy, int id, int venueId)
+    {
+        using var conn = new SqlConnection(_connectionString);
+        conn.Execute(
+            strategy.ResetProcedure,
+            new { id, venue_id = venueId },
+            commandType: CommandType.StoredProcedure);
+    }
+
+    public void RunReaper(ISmsWorkerStrategy strategy, int cutoffMinutes)
+    {
+        using var conn = new SqlConnection(_connectionString);
+        conn.Execute(
+            strategy.ReaperProcedure,
+            new { cutoff_minutes = cutoffMinutes },
+            commandType: CommandType.StoredProcedure);
+    }
 }

@@ -6,4 +6,7 @@ interface ISmsWorkerStrategy
     string SubsystemName { get; }
     string CheckProcedure { get; }
     string GetProcedure { get; }
+    string ConfirmProcedure { get; }
+    string ResetProcedure { get; }
+    string ReaperProcedure { get; }
 }

@@ -50,6 +50,42 @@
 
 ---
 
+## Two-phase delivery: claim then confirm (LMDTS-64)
+
+**Decision:** The Get SPs (`PE_GET_NEXT_*_MM_V2`) only claim a record (`InTransmission=1`) and record the claim timestamp. A separate Confirm SP (`PE_CONFIRM_SENT_*_MM`) sets `SubmittedToHostSMS=1` only after HTTP 202 from MessageMedia. On any failure the Reset SP (`PE_RESET_FAILED_*_MM`) clears `InTransmission=0` so the record re-enters the queue.
+
+**Why:** The original V1 Get SPs set `SubmittedToHostSMS=1` and `InTransmission=1` atomically at pull time. C# never wrote back the HTTP outcome. Any failure between the SP commit and a successful 202 (network down, bad creds, service crash mid-flight) left the record permanently flagged as sent with the message never delivered. The two-phase pattern makes delivery confirmation an explicit DB write, so failures are retried instead of silently lost.
+
+**Rollback boundary:** V1 SPs (`PE_GET_NEXT_*_MM`) are untouched. Redeploying the old C# binary restores old behaviour with no SP changes required.
+
+---
+
+## Reaper for orphaned in-flight records (LMDTS-64)
+
+**Decision:** A reaper SP (`PE_REAP_STUCK_*_MM`) runs every `ReaperIntervalPolls` poll cycles (default every 6 x 10s = 60s) per feed. It resets `InTransmission=1, SubmittedToHostSMS=0` records whose claim timestamp is older than `ReaperCutoffMinutes` (default 10 minutes).
+
+**Why:** A service crash between the V2 Get SP commit and the Confirm SP call leaves a record in `InTransmission=1` indefinitely. Without the reaper, this requires a manual SQL reset (previously documented in helpdesk.md). The reaper automates that recovery and eliminates the manual step.
+
+**Why per-feed instead of one central reaper service:** The reaper uses the same `ISmsWorkerStrategy` SP name pattern as the rest of the architecture. No additional DI registration is needed, and each feed is independent. The feed-specific WHERE clause is already scoped to one table.
+
+---
+
+## PE Host Guard preserved in V2 BonusAward Get SP (LMDTS-64)
+
+**Decision:** `SubmittedToHostSMSDateTime` is still set at claim time in `PE_GET_NEXT_BONUS_AWARD_MM_V2` (not deferred to the Confirm SP). The Reset SP clears it on failure.
+
+**Why:** The PE Host Guard checks `InTransmission=1 AND SubmittedToHostSMSDateTime > day_start()`. Both columns must be present at claim time for the guard to fire for in-flight records. Deferring `SubmittedToHostSMSDateTime` to confirm would mean a second BonusAward for the same PE host could be claimed while the first was still in-flight, bypassing the guard. Setting it at claim time preserves the one-per-host-per-day safeguard. Clearing it on reset means a genuinely failed send does not consume the daily slot.
+
+---
+
+## message_id logged to file only (LMDTS-64 MVP scope)
+
+**Decision:** The `message_id` returned in the MessageMedia 202 response body is parsed and logged to the FileLogger at Normal level but not written to the DB (not stored in `Message_Body_Audit_Log.Message_ID`).
+
+**Why:** Writing `message_id` to the audit log requires knowing the audit log table's PK column name to update the already-inserted row. That column name was not available at implementation time without DB access. Logging to file provides immediate traceability for ops use (search the log for `message_id=`) without requiring a schema lookup or additional SP. Storing `message_id` in the DB is deferred to a future pass once the audit log PK is confirmed.
+
+---
+
 ## External config file for credentials
 
 **Decision:** `C:\peservices\configs\appsettings-SMSGMM.json` holds all credentials. `appsettings.json` in the repo has placeholder values only.

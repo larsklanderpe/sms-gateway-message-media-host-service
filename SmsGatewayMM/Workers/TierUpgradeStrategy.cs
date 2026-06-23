@@ -10,5 +10,8 @@ class TierUpgradeStrategy : ISmsWorkerStrategy
     public string FeedName => "TierUpgrade";
     public string SubsystemName => _config.LogSubsystemTierUpgrade;
     public string CheckProcedure => "SMSGateway.PE_CHECK_TIER_UPGRADE_QUEUE_MM";
-    public string GetProcedure => "SMSGateway.PE_GET_NEXT_TIER_UPGRADE_MM";
+    public string GetProcedure => "SMSGateway.PE_GET_NEXT_TIER_UPGRADE_MM_V2";
+    public string ConfirmProcedure => "SMSGateway.PE_CONFIRM_SENT_TIER_UPGRADE_MM";
+    public string ResetProcedure => "SMSGateway.PE_RESET_FAILED_TIER_UPGRADE_MM";
+    public string ReaperProcedure => "SMSGateway.PE_REAP_STUCK_TIER_UPGRADE_MM";
 }
