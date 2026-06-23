@@ -45,14 +45,14 @@ class SmsWorker : BackgroundService
                         _log.LogDebug(_strategy.SubsystemName,
                             $"{_strategy.FeedName}: sending id={message.Id} venue={message.VenueId} to={message.DestinationNumber}");
 
-                        var sent = await _client.SendAsync(message, ct);
+                        var result = await _client.SendAsync(message, ct);
 
-                        if (sent)
+                        if (result.Success)
                             _log.LogNormal(_strategy.SubsystemName,
                                 $"{_strategy.FeedName}: sent id={message.Id} venue={message.VenueId}");
                         else
                             _log.LogError(_strategy.SubsystemName,
-                                $"{_strategy.FeedName}: MessageMedia rejected id={message.Id} venue={message.VenueId}");
+                                $"{_strategy.FeedName}: MessageMedia rejected id={message.Id} venue={message.VenueId} -- HTTP {result.StatusCode} body={Truncate(result.Body)}");
                     }
                 }
                 else
@@ -69,4 +69,7 @@ class SmsWorker : BackgroundService
             await Task.Delay(TimeSpan.FromSeconds(_config.PollIntervalSeconds), ct);
         }
     }
+
+    private static string Truncate(string? s) =>
+        string.IsNullOrEmpty(s) ? "(empty)" : (s.Length > 500 ? s[..500] : s);
 }
