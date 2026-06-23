@@ -23,7 +23,10 @@ builder.Services.AddSingleton(new SmsDataAccess(config.BarrelConnectionString));
 
 builder.Services.AddHttpClient("MessageMedia", client =>
 {
-    client.BaseAddress = new Uri(config.MessageMediaBaseUrl);
+    // Use only scheme + host from config; MessageMediaClient appends the "v1/messages"
+    // path. This tolerates a config value that mistakenly includes the path, which would
+    // otherwise resolve to /v1/v1/messages and fail every send.
+    client.BaseAddress = new Uri(new Uri(config.MessageMediaBaseUrl).GetLeftPart(UriPartial.Authority));
     var credentials = Convert.ToBase64String(
         Encoding.ASCII.GetBytes($"{config.MessageMediaApiKey}:{config.MessageMediaApiSecret}"));
     client.DefaultRequestHeaders.Authorization =
@@ -46,9 +49,12 @@ var workerHost = new HostBuilder()
         services.AddSingleton(log);
         services.AddSingleton(data);
         services.AddSingleton(mmClient);
-        services.AddHostedService(sp => new SmsWorker(new NewMemberStrategy(config), data, mmClient, log, config));
-        services.AddHostedService(sp => new SmsWorker(new TierUpgradeStrategy(config), data, mmClient, log, config));
-        services.AddHostedService(sp => new SmsWorker(new BonusAwardStrategy(config), data, mmClient, log, config));
+        // AddHostedService<T> registers via TryAddEnumerable, which dedupes by implementation
+        // type -- three SmsWorker registrations would collapse to one (only NewMember runs).
+        // Register as IHostedService directly so all three feed workers start.
+        services.AddSingleton<IHostedService>(sp => new SmsWorker(new NewMemberStrategy(config), data, mmClient, log, config));
+        services.AddSingleton<IHostedService>(sp => new SmsWorker(new TierUpgradeStrategy(config), data, mmClient, log, config));
+        services.AddSingleton<IHostedService>(sp => new SmsWorker(new BonusAwardStrategy(config), data, mmClient, log, config));
     })
     .UseWindowsService()
     .Build();

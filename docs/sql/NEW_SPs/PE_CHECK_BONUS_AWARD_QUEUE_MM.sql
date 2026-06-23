@@ -4,6 +4,10 @@
 -- ============================================================
 -- History:
 --   2026-06-22 | Written for sms-gateway-message-media-host-service build 6.6.x.x
+--   2026-06-23 | Wrapped Database Mail calls (Step 1 orphan email, Step 2 queue-depth
+--              | check + email) in TRY/CATCH so an msdb permission/mail failure can no
+--              | longer abort the SP and block the BonusAward queue. Needs the service
+--              | login added to msdb DatabaseMailUserRole to actually send alerts.
 -- ============================================================
 -- PURPOSE:
 --   Lightweight check for the BonusAward (PlayerOffers) feed only. No data
@@ -112,12 +116,18 @@ BEGIN
           )
         ORDER BY pos.OfferAwardedDateTime
 
-        EXEC msdb.dbo.sp_send_dbmail
-            @recipients = @emailRecipients,
-            @subject = 'SMS Gateway Alert - Orphaned Records Suppressed',
-            @body = @emailBody,
-            @body_format = 'TEXT',
-            @profile_name = 'SQLServer'
+        -- Alerting is best-effort: a Database Mail permission/config failure must not
+        -- block suppression or the rest of the queue check below.
+        BEGIN TRY
+            EXEC msdb.dbo.sp_send_dbmail
+                @recipients = @emailRecipients,
+                @subject = 'SMS Gateway Alert - Orphaned Records Suppressed',
+                @body = @emailBody,
+                @body_format = 'TEXT',
+                @profile_name = 'SQLServer'
+        END TRY
+        BEGIN CATCH
+        END CATCH
 
         UPDATE pos
         SET SubmittedToHostSMS = 1,
@@ -149,12 +159,24 @@ BEGIN
       AND SubmittedToHostSMS = 0
       AND ISNULL(SuppressedFromTransmission, 0) = 0
 
-    IF @queueDepth > 100 AND NOT EXISTS (
-        SELECT 1 FROM msdb.dbo.sysmail_sentitems
-        WHERE recipients LIKE '%@playerelite.com.au%'
-          AND subject = 'SMS Gateway Alert - Queue Depth Exceeds Threshold'
-          AND send_request_date > DATEADD(HOUR, -1, GETDATE())
-    )
+    -- Reading msdb.dbo.sysmail_sentitems requires Database Mail rights. If the service
+    -- login lacks them, treat as "already alerted" so the check degrades to no-email
+    -- rather than throwing and blocking the queue (see DatabaseMailUserRole grant script).
+    DECLARE @recentlyAlerted BIT = 0
+    BEGIN TRY
+        IF EXISTS (
+            SELECT 1 FROM msdb.dbo.sysmail_sentitems
+            WHERE recipients LIKE '%@playerelite.com.au%'
+              AND subject = 'SMS Gateway Alert - Queue Depth Exceeds Threshold'
+              AND send_request_date > DATEADD(HOUR, -1, GETDATE())
+        )
+            SET @recentlyAlerted = 1
+    END TRY
+    BEGIN CATCH
+        SET @recentlyAlerted = 1
+    END CATCH
+
+    IF @queueDepth > 100 AND @recentlyAlerted = 0
     BEGIN
         DECLARE @queueRecipients NVARCHAR(MAX)
         DECLARE @queueBody NVARCHAR(MAX)
@@ -168,12 +190,16 @@ BEGIN
         SET @queueBody = @queueBody + CAST(@queueDepth AS VARCHAR(10)) + ' bonus award record(s) pending transmission today.' + CHAR(13) + CHAR(10)
         SET @queueBody = @queueBody + 'The SMS gateway service may be stalled or falling behind.' + CHAR(13) + CHAR(10)
 
-        EXEC msdb.dbo.sp_send_dbmail
-            @recipients = @queueRecipients,
-            @subject = 'SMS Gateway Alert - Queue Depth Exceeds Threshold',
-            @body = @queueBody,
-            @body_format = 'TEXT',
-            @profile_name = 'SQLServer'
+        BEGIN TRY
+            EXEC msdb.dbo.sp_send_dbmail
+                @recipients = @queueRecipients,
+                @subject = 'SMS Gateway Alert - Queue Depth Exceeds Threshold',
+                @body = @queueBody,
+                @body_format = 'TEXT',
+                @profile_name = 'SQLServer'
+        END TRY
+        BEGIN CATCH
+        END CATCH
     END
 
     -- =====================================================================
