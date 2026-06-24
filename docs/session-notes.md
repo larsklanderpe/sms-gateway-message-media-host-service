@@ -18,6 +18,39 @@
 
 ---
 
+## 2026-06-23 (Close)
+**Tool:** Claude Code
+**Branch:** feature/LMDTS-64-delivery-confirmation
+**STATUS:** Complete — PR #2 raised; Lars deploying to UAT/TEST; LMDTS-64 -> Ready For Testing
+
+**CURRENT BRANCH:** feature/LMDTS-64-delivery-confirmation
+**OPEN PRs:** [PR #2](https://github.com/larsklanderpe/sms-gateway-message-media-host-service/pull/2) (feature/LMDTS-64-delivery-confirmation -> main) — pending UAT verify + merge
+**EXTERNAL DEPENDENCIES:** `101.0.69.158` barrel — must run 12 SPs before binary deploy
+
+### Changed
+- `.gitignore` — added `**/Properties/PublishProfiles/`
+- `docs/next_steps.md` — LMDTS-64 SP deploy order, binary deploy, verification steps, rollback
+- `docs/superpowers/deliverables/2026-06-23-LMDTS-64-delivery-confirmation-deployment-runbook.md` — NEW tick-box runbook with log-level callout, all 12 SPs listed, verification SQL, rollback
+
+### Next
+- Lars: deploy 12 SPs to UAT barrel, stop service, deploy binary, start, verify via runbook
+- After UAT pass: merge PR #2 to main
+- Deferred: `EXEC sp_help 'SMSGateway.Message_Body_Audit_Log'` on UAT to get PK column, then add `message_id` to Confirm SPs
+
+### Refs
+- [LMDTS-64](https://playerelite.atlassian.net/browse/LMDTS-64) — PR #2 open, transitioning to Ready For Testing
+- [LMDTS-65](https://playerelite.atlassian.net/browse/LMDTS-65) (backlog) — test project
+
+### Backlog
+1. LMDTS-64 deferred — `message_id` to audit log (need PK column from UAT DB)
+2. LMDTS-65 — test project / regression harness
+3. Rotate compromised MessageMedia token (`UgCJZEjREUJgQGuXOsyf` hardcoded in legacy repo)
+
+### Learning
+- No new corrections this session
+
+---
+
 ## Session 2026-06-23 (2) — LMDTS-64 two-phase delivery confirmation
 
 **Tool:** Claude Code
