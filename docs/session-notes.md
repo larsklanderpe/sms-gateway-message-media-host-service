@@ -1,6 +1,6 @@
 # Session Notes — SMS Gateway MessageMedia Host Service
 
-## CURRENT BRANCH: feature/LMDTS-63-dotnet10-three-feed-modernisation
+## CURRENT BRANCH: feature/LMDTS-64-delivery-confirmation
 
 **Jira:** [LMDTS-63](https://playerelite.atlassian.net/browse/LMDTS-63)
 **Service abbreviation:** SMSGMM
@@ -9,12 +9,130 @@
 
 ---
 
-## OPEN PRs: None yet (not pushed to GitHub)
+## OPEN PRs: PR #2 (feature/LMDTS-64-delivery-confirmation → main) — raised this session, pending merge
 
 ## EXTERNAL DEPENDENCIES
 - `101.0.69.158` — UAT barrel DB (PEBarrel). Required for log level reads and all SP calls.
 - `Configuration.Services_Logging` rows must exist for `SmsGatewayMM / SMSGMM_NewMember`, `SMSGMM_TierUpgrade`, `SMSGMM_BonusAward` before first run.
 - MessageMedia REST API — **need fresh credentials**. Old hardcoded Base64 token in legacy source is COMPROMISED.
+
+---
+
+## 2026-06-23 (Close)
+**Tool:** Claude Code
+**Branch:** feature/LMDTS-64-delivery-confirmation
+**STATUS:** Complete — PR #2 raised; Lars deploying to UAT/TEST; LMDTS-64 -> Ready For Testing
+
+**CURRENT BRANCH:** feature/LMDTS-64-delivery-confirmation
+**OPEN PRs:** [PR #2](https://github.com/larsklanderpe/sms-gateway-message-media-host-service/pull/2) (feature/LMDTS-64-delivery-confirmation -> main) — pending UAT verify + merge
+**EXTERNAL DEPENDENCIES:** `101.0.69.158` barrel — must run 12 SPs before binary deploy
+
+### Changed
+- `.gitignore` — added `**/Properties/PublishProfiles/`
+- `docs/next_steps.md` — LMDTS-64 SP deploy order, binary deploy, verification steps, rollback
+- `docs/superpowers/deliverables/2026-06-23-LMDTS-64-delivery-confirmation-deployment-runbook.md` — NEW tick-box runbook with log-level callout, all 12 SPs listed, verification SQL, rollback
+
+### Next
+- Lars: deploy 12 SPs to UAT barrel, stop service, deploy binary, start, verify via runbook
+- After UAT pass: merge PR #2 to main
+- Deferred: `EXEC sp_help 'SMSGateway.Message_Body_Audit_Log'` on UAT to get PK column, then add `message_id` to Confirm SPs
+
+### Refs
+- [LMDTS-64](https://playerelite.atlassian.net/browse/LMDTS-64) — PR #2 open, transitioning to Ready For Testing
+- [LMDTS-65](https://playerelite.atlassian.net/browse/LMDTS-65) (backlog) — test project
+
+### Backlog
+1. LMDTS-64 deferred — `message_id` to audit log (need PK column from UAT DB)
+2. LMDTS-65 — test project / regression harness
+3. Rotate compromised MessageMedia token (`UgCJZEjREUJgQGuXOsyf` hardcoded in legacy repo)
+
+### Learning
+- No new corrections this session
+
+---
+
+## Session 2026-06-23 (2) — LMDTS-64 two-phase delivery confirmation
+
+**Tool:** Claude Code
+**Branch:** feature/LMDTS-64-delivery-confirmation
+**STATUS:** Code complete, build clean at 6.6.18.0. PR raised. SPs not yet deployed to UAT/TEST.
+
+### Changed
+
+**SQL — 12 new files in `docs/sql/NEW_SPs/`:**
+- `PE_GET_NEXT_*_MM_V2.sql` (x3) — claim-only V2 Get SPs; V1 originals untouched (rollback = redeploy old binary, no SP changes)
+- `PE_CONFIRM_SENT_*_MM.sql` (x3) — sets `SubmittedToHostSMS=1` after HTTP 202
+- `PE_RESET_FAILED_*_MM.sql` (x3) — clears `InTransmission=0` on failure so record retries
+- `PE_REAP_STUCK_*_MM.sql` (x3) — resets orphaned in-flight records older than N minutes (replaces manual SQL reset in helpdesk)
+
+**C#:**
+- `SmsMmConfig.cs` — added `ReaperCutoffMinutes` (default 10), `ReaperIntervalPolls` (default 6)
+- `appsettings.json` — added default values for new config keys
+- `ISmsWorkerStrategy.cs` — added `ConfirmProcedure`, `ResetProcedure`, `ReaperProcedure`
+- `*Strategy.cs` (x3) — `GetProcedure` now points to `_V2` SPs; 3 new properties implemented
+- `SmsDataAccess.cs` — added `ConfirmSent`, `ResetFailed`, `RunReaper`
+- `MessageMediaClient.cs` — parses `messages[0].message_id` from 202 response body; `SendResult` gains `MessageId`
+- `SmsWorker.cs` — calls `ConfirmSent`/`ResetFailed` on each send result; reaper runs every `ReaperIntervalPolls` polls; exception path resets the claimed record
+
+### Design decisions recorded
+- Two-phase delivery (claim then confirm)
+- Reaper for orphaned in-flight records
+- PE Host Guard preserved in V2 BonusAward SP
+- `message_id` logged to file only (audit log DB update deferred — need `Message_Body_Audit_Log` PK column name from UAT DB)
+
+### Next
+1. **Deploy SPs to UAT barrel:** run all 12 new SP files in `docs/sql/NEW_SPs/` (the 3 V2 Get SPs + 9 new SPs). V1 SPs are untouched.
+2. **Deploy new binary to TEST:** stop service, publish, start, verify.
+3. **Verify:** log shows `confirmed id=... message_id=...` on a real BonusAward send. Also confirm that on a simulated failure (bad API key) the log shows `reset for retry` and the record is back to `InTransmission=0` in the DB.
+4. **Deferred:** verify `Message_Body_Audit_Log` PK column name (`EXEC sp_help 'SMSGateway.Message_Body_Audit_Log'` on UAT) to enable future `message_id` storage in audit log.
+5. **LMDTS-65:** test project / regression harness (next session).
+
+### Refs
+- LMDTS-64 (this session) — PR #2 raised
+- LMDTS-65 (backlog) — test project
+
+---
+
+## Session 2026-06-23 — Runtime debugging, fixes merged to main
+
+**Tool:** Claude Code
+**Branch:** main (fixes/LMDTS-63-runtime-bugfixes merged via PR #1, branch deleted)
+**STATUS:** Active (rebuild not yet deployed/verified in test; production unaffected on legacy build)
+
+### Changed
+- `SmsGatewayMM/Program.cs` — register workers as `IHostedService` directly (`AddHostedService<T>` dedupes by implementation type via TryAddEnumerable, so only NewMember was starting); derive HTTP BaseAddress from scheme+host (config value contained the path, resolving to `/v1/v1/messages`)
+- `SmsGatewayMM/Http/MessageMediaClient.cs` — send `source_number_type=ALPHANUMERIC` + `format=SMS` (alpha sender IDs were rejected); return `SendResult(Success, StatusCode, Body)`
+- `SmsGatewayMM/Workers/SmsWorker.cs` — log HTTP status + body on rejected sends
+- `docs/sql/NEW_SPs/PE_CHECK_BONUS_AWARD_QUEUE_MM.sql` — TRY/CATCH around `sp_send_dbmail` + `sysmail_sentitems` so an msdb permission failure cannot abort the SP / block the queue
+- `docs/sql/GRANT_DatabaseMail_SmsGatewayMM.sql` — NEW: DatabaseMailUserRole grant for the service login (Option A; Lars handled)
+- `docs/helpdesk.md` — corrected `Configuration.Services_Logging` table shape (ServiceID, SubsystemID, ModifiedDate); DB target `PE_Barrel_Cloud_Master`
+
+### Next
+- Deploy rebuilt exe to TEST, confirm `BonusAward: sent` / HTTP 202 from new instrumentation. Do NOT deploy to prod until verified.
+- LMDTS-65: add test project, extract worker registration into a testable method, add the 3-worker regression test + failure-case harness (fresh context window).
+- Optional: comment on LMDTS-63 linking PR #1.
+
+### Refs
+- LMDTS-63 (parent; runtime fixes) — PR #1 merged to main, merge commit `b6b9a71`
+- LMDTS-64 (backlog) — mark-sent-before-delivery message-loss; status-check design comment added
+- LMDTS-65 (backlog) — test project / regression test / failure-case harness
+- PR: https://github.com/larsklanderpe/sms-gateway-message-media-host-service/pull/1
+
+### Backlog
+1. LMDTS-64 — confirm delivery before marking sent (capture `message_id`; pull GET status vs delivery-report webhook)
+2. LMDTS-65 — test harness
+3. Rotate compromised MessageMedia token (key `UgCJZEjREUJgQGuXOsyf`, hardcoded in legacy repo)
+
+### EXTERNAL DEPENDENCIES
+- Barrel DB (`PE_Barrel_Cloud_Master` / UAT `101.0.69.158`) — log levels + all SP calls
+- MessageMedia REST API (`https://api.messagemedia.com`, Basic auth) — token compromised, rotate
+- Database Mail (msdb) — service login added to `DatabaseMailUserRole` (Option A, handled)
+
+### Learning
+- **Branch hygiene:** I made code edits on `main` before branching; Lars caught it. Create the `fixes/`/`feature/` branch BEFORE the first edit, even mid-debugging. (CLAUDE.md already states this; reinforce.) → CLAUDE.md / userPreferences
+- **`AddHostedService<T>` dedupes by implementation type** (TryAddEnumerable) — registering the same BackgroundService class N times silently keeps one. Use `AddSingleton<IHostedService>`. → technical note
+- **MessageMedia:** alphanumeric sender IDs require `source_number_type=ALPHANUMERIC` or they are rejected; base URL must be host-only when the code appends the path. → technical note
+- **Config drift:** the external config file overrode the (correct) repo placeholder with a bad base URL. Verify the running config, not just the committed placeholder. → technical note
 
 ---
 

@@ -38,8 +38,23 @@ class MessageMediaClient
 
         var response = await client.PostAsync("v1/messages", content, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
-        return new SendResult(response.IsSuccessStatusCode, (int)response.StatusCode, body);
+        var messageId = response.IsSuccessStatusCode ? ParseMessageId(body) : null;
+        return new SendResult(response.IsSuccessStatusCode, (int)response.StatusCode, body, messageId);
+    }
+
+    private static string? ParseMessageId(string? body)
+    {
+        if (string.IsNullOrEmpty(body)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement
+                .GetProperty("messages")[0]
+                .GetProperty("message_id")
+                .GetString();
+        }
+        catch { return null; }
     }
 }
 
-record SendResult(bool Success, int StatusCode, string? Body);
+record SendResult(bool Success, int StatusCode, string? Body, string? MessageId = null);

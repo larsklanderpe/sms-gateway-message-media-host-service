@@ -4,6 +4,7 @@ using SmsGatewayMM.Config;
 using SmsGatewayMM.Data;
 using SmsGatewayMM.Http;
 using SmsGatewayMM.Logging;
+using SmsGatewayMM.Models;
 
 class SmsWorker : BackgroundService
 {
@@ -30,16 +31,35 @@ class SmsWorker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         _log.LogNormal(_strategy.SubsystemName, $"{_strategy.FeedName} worker started");
+        var pollCount = 0;
 
         while (!ct.IsCancellationRequested)
         {
+            pollCount++;
+
+            if (pollCount % _config.ReaperIntervalPolls == 0)
+            {
+                try
+                {
+                    _data.RunReaper(_strategy, _config.ReaperCutoffMinutes);
+                    _log.LogDebug(_strategy.SubsystemName,
+                        $"{_strategy.FeedName}: reaper ran (cutoff={_config.ReaperCutoffMinutes}m)");
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(_strategy.SubsystemName,
+                        $"{_strategy.FeedName}: reaper failed -- {ex.Message}");
+                }
+            }
+
+            SmsReadyMessage? message = null;
             try
             {
                 if (_data.HasPending(_strategy))
                 {
                     _log.LogDebug(_strategy.SubsystemName, $"{_strategy.FeedName}: pending record found");
 
-                    var message = _data.GetNext(_strategy);
+                    message = _data.GetNext(_strategy);
                     if (message != null)
                     {
                         _log.LogDebug(_strategy.SubsystemName,
@@ -48,11 +68,17 @@ class SmsWorker : BackgroundService
                         var result = await _client.SendAsync(message, ct);
 
                         if (result.Success)
+                        {
+                            _data.ConfirmSent(_strategy, message.Id, message.VenueId);
                             _log.LogNormal(_strategy.SubsystemName,
-                                $"{_strategy.FeedName}: sent id={message.Id} venue={message.VenueId}");
+                                $"{_strategy.FeedName}: confirmed id={message.Id} venue={message.VenueId} message_id={result.MessageId ?? "unknown"}");
+                        }
                         else
+                        {
+                            _data.ResetFailed(_strategy, message.Id, message.VenueId);
                             _log.LogError(_strategy.SubsystemName,
-                                $"{_strategy.FeedName}: MessageMedia rejected id={message.Id} venue={message.VenueId} -- HTTP {result.StatusCode} body={Truncate(result.Body)}");
+                                $"{_strategy.FeedName}: rejected id={message.Id} venue={message.VenueId} -- HTTP {result.StatusCode} body={Truncate(result.Body)} -- reset for retry");
+                        }
                     }
                 }
                 else
@@ -64,6 +90,17 @@ class SmsWorker : BackgroundService
             {
                 _log.LogError(_strategy.SubsystemName,
                     $"{_strategy.FeedName}: unhandled exception -- {ex.Message}");
+
+                if (message != null)
+                {
+                    try
+                    {
+                        _data.ResetFailed(_strategy, message.Id, message.VenueId);
+                        _log.LogError(_strategy.SubsystemName,
+                            $"{_strategy.FeedName}: reset id={message.Id} venue={message.VenueId} after exception");
+                    }
+                    catch { }
+                }
             }
 
             await Task.Delay(TimeSpan.FromSeconds(_config.PollIntervalSeconds), ct);

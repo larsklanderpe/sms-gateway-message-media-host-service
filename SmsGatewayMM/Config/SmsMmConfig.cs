@@ -11,4 +11,6 @@ record SmsMmConfig
     public string LogSubsystemNewMember { get; init; } = "SMSGMM_NewMember";
     public string LogSubsystemTierUpgrade { get; init; } = "SMSGMM_TierUpgrade";
     public string LogSubsystemBonusAward { get; init; } = "SMSGMM_BonusAward";
+    public int ReaperCutoffMinutes { get; init; } = 10;
+    public int ReaperIntervalPolls { get; init; } = 6;
 }
